@@ -1,10 +1,16 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:expression_detection/screens/result_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as Path;
 
 class UploadImage extends StatefulWidget {
   const UploadImage({Key? key}) : super(key: key);
@@ -15,6 +21,11 @@ class UploadImage extends StatefulWidget {
 
 class _UploadImageState extends State<UploadImage> {
   File? selectedImage;
+  var permanentImage;
+  late FormData formData;
+
+  bool isLoading = false;
+
   bool _showQuiz = false;
   Answers answer = Answers.answer1;
   Answers answer2 = Answers.answer1;
@@ -33,12 +44,22 @@ class _UploadImageState extends State<UploadImage> {
       if (selectedImage == null) return;
 
       final imageTemporary = File(selectedImage.path);
+      final imagePermenant = await saveImagePermanently(selectedImage.path);
       setState(() {
         this.selectedImage = imageTemporary;
+        permanentImage = imagePermenant;
       });
     } on PlatformException catch (e) {
       print('Failed to pick image: $e');
     }
+  }
+
+  Future saveImagePermanently(String imagePath) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final name = Path.basename(imagePath);
+    final image = File('${directory.path}/$name');
+
+    return File(imagePath).copy(image.path);
   }
 
   int getSum(Answers selectedAnswer) {
@@ -60,44 +81,38 @@ class _UploadImageState extends State<UploadImage> {
     return sum;
   }
 
-  void _showSubmitPopup(int totalPoints, File? selectedImagepopup) {
-    showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-              // title: Text('Your Current Location'),
-              content: Container(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 90,
-                    ),
-                    Text(
-                      'Form Submited Successfully',
-                      textAlign: TextAlign.center,
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
-                    Image.file(
-                      selectedImagepopup!,
-                      fit: BoxFit.cover,
-                      height: 200,
-                    ),
-                    Text(totalPoints.toString(),
-                        style: TextStyle(color: Colors.green, fontSize: 40)),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('OK'),
-                )
-              ],
-            ));
+  postFormApi(var image, int sum) async {
+    setState(() {
+      isLoading = true;
+    });
+    var request = http.MultipartRequest(
+        "POST", Uri.parse("http://10.0.2.2:5000/uploader"));
+    //add text fields
+    request.fields["value"] = sum.toString();
+    // print(selectedImage);
+    //create multipart using filepath, string or bytes
+    var pic = await http.MultipartFile.fromPath("file", image.path);
+    //add multipart to request
+    request.files.add(pic);
+    var response = await request.send();
+
+    //Get the response from the server
+    var responseData = await http.Response.fromStream(response);
+    var decodedResponse = json.decode(responseData.body);
+    List doctors = decodedResponse['doctors'];
+    var stressLevel = decodedResponse['stress-level'];
+    // var responseString = String.fromCharCodes(responseData);
+    setState(() {
+      isLoading = false;
+    });
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (context) => ResultPage(
+                stress: stressLevel,
+                doctorsList: doctors,
+              )),
+    );
   }
 
   @override
@@ -152,49 +167,49 @@ class _UploadImageState extends State<UploadImage> {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     IconButton(
-                      onPressed: () => pickImage(ImageSource.camera),
+                      onPressed: () => pickImage(ImageSource.gallery),
                       icon: Icon(Icons.camera_alt,
                           size: 50, color: Theme.of(context).primaryColor),
                     ),
                     // selectedImage != null
                     //     ? IconButton(
                     //         onPressed: () {
-                    //           showDialog(
-                    //               context: context,
-                    //               builder: (context) => AlertDialog(
-                    //                     // title: Text('Your Current Location'),
-                    //                     content: Container(
-                    //                       height: 250,
-                    //                       child: Column(
-                    //                         crossAxisAlignment:
-                    //                             CrossAxisAlignment.center,
-                    //                         mainAxisAlignment:
-                    //                             MainAxisAlignment.spaceAround,
-                    //                         children: const [
-                    //                           Icon(
-                    //                             Icons.check_circle,
-                    //                             color: Colors.green,
-                    //                             size: 90,
-                    //                           ),
-                    //                           Text(
-                    //                             'Image Uploaded',
-                    //                             textAlign: TextAlign.center,
-                    //                             style: TextStyle(
-                    //                                 fontSize: 22,
-                    //                                 fontWeight:
-                    //                                     FontWeight.bold),
-                    //                           ),
-                    //                         ],
-                    //                       ),
-                    //                     ),
-                    //                     actions: [
-                    //                       TextButton(
-                    //                         onPressed: () =>
-                    //                             Navigator.pop(context),
-                    //                         child: Text('OK'),
-                    //                       )
-                    //                     ],
-                    //                   ));
+                    // showDialog(
+                    //     context: context,
+                    //     builder: (context) => AlertDialog(
+                    //           // title: Text('Your Current Location'),
+                    //           content: Container(
+                    //             height: 250,
+                    //             child: Column(
+                    //               crossAxisAlignment:
+                    //                   CrossAxisAlignment.center,
+                    //               mainAxisAlignment:
+                    //                   MainAxisAlignment.spaceAround,
+                    //               children: const [
+                    //                 Icon(
+                    //                   Icons.check_circle,
+                    //                   color: Colors.green,
+                    //                   size: 90,
+                    //                 ),
+                    //                 Text(
+                    //                   'Image Uploaded',
+                    //                   textAlign: TextAlign.center,
+                    //                   style: TextStyle(
+                    //                       fontSize: 22,
+                    //                       fontWeight:
+                    //                           FontWeight.bold),
+                    //                 ),
+                    //               ],
+                    //             ),
+                    //           ),
+                    //           actions: [
+                    //             TextButton(
+                    //               onPressed: () =>
+                    //                   Navigator.pop(context),
+                    //               child: Text('OK'),
+                    //             )
+                    //           ],
+                    //         ));
 
                     //           //enable quiz
                     //           setState(() {
@@ -1016,24 +1031,39 @@ class _UploadImageState extends State<UploadImage> {
                         Container(
                           margin: EdgeInsets.all(20),
                           width: 250,
-                          child: ElevatedButton(
-                            onPressed: () => {
-                              getSum(answer),
-                              getSum(answer2),
-                              getSum(answer3),
-                              getSum(answer4),
-                              getSum(answer5),
-                              getSum(answer6),
-                              getSum(answer7),
-                              getSum(answer8),
-                              getSum(answer9),
-                              getSum(answer10),
-                              print(sum),
-                              _showSubmitPopup(sum, selectedImage),
-                              sum = 0,
-                            },
-                            child: Text('Submit'),
-                          ),
+                          child: isLoading
+                              ? Container(
+                                  color: Colors.grey,
+                                  padding: EdgeInsets.all(5),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      CircularProgressIndicator(),
+                                      SizedBox(
+                                        width: 20,
+                                      ),
+                                      Text('Analyzing'),
+                                    ],
+                                  ),
+                                )
+                              : ElevatedButton(
+                                  onPressed: () => {
+                                    getSum(answer),
+                                    getSum(answer2),
+                                    getSum(answer3),
+                                    getSum(answer4),
+                                    getSum(answer5),
+                                    getSum(answer6),
+                                    getSum(answer7),
+                                    getSum(answer8),
+                                    getSum(answer9),
+                                    getSum(answer10),
+                                    print(sum),
+                                    postFormApi(permanentImage, sum),
+                                    sum = 0,
+                                  },
+                                  child: Text('Submit'),
+                                ),
                         )
                       ],
                     ),

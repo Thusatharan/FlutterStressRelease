@@ -1,3 +1,4 @@
+import 'package:expression_detection/screens/stress_release.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 
@@ -114,7 +115,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           children: [
                             IconButton(
-                              onPressed: () => _showStressRelease(),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => StressRelaese()),
+                                );
+                              },
                               icon: Image.asset('assets/images/relax.png'),
                               color: Colors.purple,
                               iconSize: 150,
